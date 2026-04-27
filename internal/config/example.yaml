@@ -1,0 +1,29 @@
+# portwatch configuration example
+
+# How often to check each port (default: 30s)
+interval: 15s
+
+ports:
+  - host: localhost
+    port: 8080
+    actions:
+      - on: open
+        webhook: http://hooks.example.com/port-up
+      - on: close
+        webhook: http://hooks.example.com/port-down
+
+  - host: db.internal
+    port: 5432
+    actions:
+      - on: close
+        command: "echo 'DB port closed' | mail -s 'Alert' ops@example.com"
+      - on: any
+        webhook: http://hooks.example.com/db-state-change
+
+  - host: 10.0.0.5
+    port: 443
+    actions:
+      - on: open
+        command: systemctl start myservice
+      - on: close
+        command: systemctl stop myservice
