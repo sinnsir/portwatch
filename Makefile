@@ -3,7 +3,7 @@ VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -ldflags "-X main.version=$(VERSION)"
 GO       := go
 
-.PHONY: all build test lint clean run
+.PHONY: all build test lint clean run install vet
 
 all: build
 
@@ -15,6 +15,12 @@ test:
 
 test-verbose:
 	$(GO) test -v ./...
+
+test-race:
+	$(GO) test -race ./...
+
+vet:
+	$(GO) vet ./...
 
 lint:
 	golangci-lint run ./...
