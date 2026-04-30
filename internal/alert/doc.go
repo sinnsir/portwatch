@@ -13,4 +13,8 @@
 //	if f.Allow(port, state) {
 //		// fire webhook or run command
 //	}
+//
+// A zero-value Cooldown disables rate limiting, meaning every alert is
+// forwarded immediately regardless of how recently the same (port, state)
+// pair was seen. This is equivalent to setting Cooldown to 0.
 package alert
