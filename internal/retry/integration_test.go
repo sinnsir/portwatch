@@ -65,3 +65,26 @@ func TestDo_ConcurrentSafety(t *testing.T) {
 		t.Fatalf("expected %d calls, got %d", goroutines, total.Load())
 	}
 }
+
+func TestDo_ExhaustsMaxAttempts(t *testing.T) {
+	p := retry.Policy{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Millisecond,
+		Multiplier:   1.0,
+		MaxDelay:     5 * time.Millisecond,
+	}
+
+	sentinel := errors.New("permanent failure")
+	calls := 0
+	err := retry.Do(context.Background(), p, func() error {
+		calls++
+		return sentinel
+	})
+
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected sentinel error, got %v", err)
+	}
+	if calls != p.MaxAttempts {
+		t.Fatalf("expected %d calls, got %d", p.MaxAttempts, calls)
+	}
+}
