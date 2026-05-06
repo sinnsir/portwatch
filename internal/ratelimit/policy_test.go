@@ -48,3 +48,17 @@ func TestRemaining_AfterWindowExpiry(t *testing.T) {
 		t.Fatalf("expected full bucket after window expiry, got %d", got)
 	}
 }
+
+func TestAllow_DecreasesRemaining(t *testing.T) {
+	l := New(5, time.Minute)
+	key := "allow-decrements"
+
+	for i := 5; i >= 0; i-- {
+		if got := l.Remaining(key); got != i {
+			t.Fatalf("expected remaining %d before Allow, got %d", i, got)
+		}
+		if i > 0 {
+			l.Allow(key)
+		}
+	}
+}
