@@ -1,23 +1,22 @@
-// Package backoff provides jittered exponential backoff calculation
-// for use in retry and circuit-breaker logic.
+// Package backoff provides an exponential back-off calculator used when
+// scheduling reconnection attempts or cooldown periods after failures.
 package backoff
 
 import (
 	"math"
-	"math/rand"
 	"time"
 )
 
-// Policy controls how backoff durations are computed.
+// Policy controls how delays are computed between successive attempts.
 type Policy struct {
-	// InitialDelay is the base delay for the first backoff step.
+	// InitialDelay is the wait time before the second attempt.
 	InitialDelay time.Duration
-	// Multiplier is applied to the delay on each successive step.
+	// Multiplier is applied to the previous delay on each step.
 	Multiplier float64
-	// MaxDelay caps the computed delay regardless of step count.
+	// MaxDelay caps the computed delay so it never grows unbounded.
 	MaxDelay time.Duration
-	// Jitter adds random noise as a fraction of the computed delay (0–1).
-	Jitter float64
+	// Jitter adds a random fraction (0–1) of the computed delay to spread load.
+	Jitter bool
 }
 
 // DefaultPolicy returns a Policy with sensible defaults.
@@ -26,30 +25,58 @@ func DefaultPolicy() Policy {
 		InitialDelay: 500 * time.Millisecond,
 		Multiplier:   2.0,
 		MaxDelay:     30 * time.Second,
-		Jitter:       0.2,
+		Jitter:       true,
 	}
 }
 
-// Duration returns the backoff duration for the given attempt (0-indexed).
-// It applies exponential growth, caps at MaxDelay, then adds jitter.
-func (p Policy) Duration(attempt int) time.Duration {
-	if attempt < 0 {
-		attempt = 0
-	}
+// Calculator holds state for a single back-off sequence.
+type Calculator struct {
+	policy  Policy
+	attempt int
+	rng     func() float64 // returns value in [0, 1); injectable for tests
+}
 
-	base := float64(p.InitialDelay) * math.Pow(p.Multiplier, float64(attempt))
-	if base > float64(p.MaxDelay) {
-		base = float64(p.MaxDelay)
+// New returns a Calculator using p. If p.Multiplier <= 1 it is set to 2.
+// If p.InitialDelay <= 0 it is set to 100 ms.
+func New(p Policy) *Calculator {
+	if p.Multiplier <= 1 {
+		p.Multiplier = 2
 	}
+	if p.InitialDelay <= 0 {
+		p.InitialDelay = 100 * time.Millisecond
+	}
+	if p.MaxDelay <= 0 {
+		p.MaxDelay = 30 * time.Second
+	}
+	return &Calculator{policy: p, rng: defaultRng}
+}
 
-	if p.Jitter > 0 {
-		// jitter is ± (Jitter/2) * base
-		noise := (rand.Float64() - 0.5) * p.Jitter * base
-		base += noise
-		if base < 0 {
-			base = 0
+// Next returns the delay for the current attempt and advances the internal
+// counter. The first call (attempt 0) always returns 0 so the initial
+// execution is immediate.
+func (c *Calculator) Next() time.Duration {
+	if c.attempt == 0 {
+		c.attempt++
+		return 0
+	}
+	exp := math.Pow(c.policy.Multiplier, float64(c.attempt-1))
+	d := time.Duration(float64(c.policy.InitialDelay) * exp)
+	if d > c.policy.MaxDelay {
+		d = c.policy.MaxDelay
+	}
+	if c.policy.Jitter {
+		jitter := time.Duration(float64(d) * c.rng())
+		d += jitter
+		if d > c.policy.MaxDelay {
+			d = c.policy.MaxDelay
 		}
 	}
-
-	return time.Duration(base)
+	c.attempt++
+	return d
 }
+
+// Reset restarts the sequence from attempt 0.
+func (c *Calculator) Reset() { c.attempt = 0 }
+
+// Attempt returns the current attempt index (0-based).
+func (c *Calculator) Attempt() int { return c.attempt }
