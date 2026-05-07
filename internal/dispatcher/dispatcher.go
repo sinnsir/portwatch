@@ -31,6 +31,13 @@ func (d *Dispatcher) Register(h Handler) {
 	d.handlers = append(d.handlers, h)
 }
 
+// Len returns the number of currently registered handlers.
+func (d *Dispatcher) Len() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return len(d.handlers)
+}
+
 // Dispatch reads events from ch until it is closed or ctx is cancelled,
 // then calls every registered handler concurrently for each event.
 // Dispatch blocks until the source channel is drained.
