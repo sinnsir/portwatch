@@ -71,6 +71,24 @@ func (h *History) Snapshot() []Event {
 	return out
 }
 
+// Filter returns a copy of all stored events that match the given host and port
+// in chronological order (oldest first). Pass an empty host or zero port to
+// skip filtering on that field.
+func (h *History) Filter(host string, port int) []Event {
+	all := h.Snapshot()
+	out := all[:0:0] // reuse backing-array type but start empty
+	for _, e := range all {
+		if host != "" && e.Host != host {
+			continue
+		}
+		if port != 0 && e.Port != port {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // Len returns the number of events currently stored.
 func (h *History) Len() int {
 	h.mu.Lock()
