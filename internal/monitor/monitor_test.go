@@ -20,21 +20,28 @@ func freePort(t *testing.T) int {
 	return port
 }
 
-func TestMonitor_DetectsInitialState(t *testing.T) {
-	port := freePort(t)
-
+// newTestMonitor creates a Monitor configured with a single port entry for use
+// in tests. The returned key is the address string used in m.states.
+func newTestMonitor(t *testing.T, port int) (m *Monitor, key string) {
+	t.Helper()
 	cfg := &config.Config{
 		Interval: 1,
 		Ports: []config.PortEntry{
 			{Host: "127.0.0.1", Port: port},
 		},
 	}
+	m = New(cfg)
+	key = "127.0.0.1:" + strconv.Itoa(port)
+	return m, key
+}
 
-	m := New(cfg)
+func TestMonitor_DetectsInitialState(t *testing.T) {
+	port := freePort(t)
+	m, key := newTestMonitor(t, port)
+
 	// checkAll should populate initial state without panicking.
 	m.checkAll()
 
-	key := cfg.Ports[0].Address()
 	if _, ok := m.states[key]; !ok {
 		t.Errorf("expected state to be recorded for %s", key)
 	}
@@ -47,17 +54,9 @@ func TestMonitor_DetectsStateChange(t *testing.T) {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 
-	cfg := &config.Config{
-		Interval: 1,
-		Ports: []config.PortEntry{
-			{Host: "127.0.0.1", Port: port},
-		},
-	}
-
-	m := New(cfg)
+	m, key := newTestMonitor(t, port)
 	m.checkAll() // initial: open
 
-	key := "127.0.0.1:" + strconv.Itoa(port)
 	initialState := m.states[key]
 	if initialState.String() != "open" {
 		t.Fatalf("expected open, got %s", initialState)
